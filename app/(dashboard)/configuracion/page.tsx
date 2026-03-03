@@ -1,139 +1,86 @@
 "use client"
 
-import { useState } from "react"
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Building2, Percent, Plus, Pencil, Trash2, Tag, Truck, Save } from "lucide-react"
-import type { Category, Supplier } from "@/lib/types"
-//import { set } from "date-fns"
+import { Building2, Percent, Tag, Truck, Save, Plus } from "lucide-react"
+import { toast } from "sonner"
 
 export default function ConfiguracionPage() {
-  const {
-    config, updateConfig,
-    categories, addCategory, updateCategory, deleteCategory,
-    suppliers, addSupplier, updateSupplier, deleteSupplier,
-    products,
-  } = useAppStore()
-
-  // Business config state
-  const [businessName, setBusinessName] = useState(config.businessName)
-  const [taxRate, setTaxRate] = useState(config.taxRate.toString())
+  const [categories, setCategories] = useState<any[]>([])
+  const [suppliers, setSuppliers] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [businessName, setBusinessName] = useState("Ferretería")
+  const [taxRate, setTaxRate] = useState("15")
   const [saved, setSaved] = useState(false)
 
-  // Category dialog state
   const [catDialogOpen, setCatDialogOpen] = useState(false)
-  const [editingCat, setEditingCat] = useState<Category | null>(null)
   const [catName, setCatName] = useState("")
   const [catDesc, setCatDesc] = useState("")
 
-  // Supplier dialog state
   const [supDialogOpen, setSupDialogOpen] = useState(false)
-  const [editingSup, setEditingSup] = useState<Supplier | null>(null)
   const [supName, setSupName] = useState("")
   const [supIdent, setSupIdent] = useState("")
-  const [supContact, setSupContact] = useState("")
   const [supPhone, setSupPhone] = useState("")
   const [supEmail, setSupEmail] = useState("")
   const [supAddress, setSupAddress] = useState("")
 
+  const loadData = () => {
+    fetch('/api/categories').then(res => res.json()).then(setCategories)
+    fetch('/api/suppliers').then(res => res.json()).then(setSuppliers)
+    fetch('/api/products').then(res => res.json()).then(setProducts)
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
   function handleSaveConfig() {
-    updateConfig({
-      businessName: businessName.trim(),
-      taxRate: Number.parseFloat(taxRate) || 15,
-    })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
-  // Category handlers
-  function handleOpenCreateCat() {
-    setEditingCat(null)
+  async function handleSaveCategory() {
+    if (!catName.trim()) return
+    await fetch('/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: catName.trim(), description: catDesc.trim() })
+    })
+    toast.success("Categoría creada")
     setCatName("")
     setCatDesc("")
-    setCatDialogOpen(true)
-  }
-
-  function handleOpenEditCat(cat: Category) {
-    setEditingCat(cat)
-    setCatName(cat.name)
-    setCatDesc(cat.description)
-    setCatDialogOpen(true)
-  }
-
-  function handleSaveCat() {
-    if (!catName.trim()) return
-    if (editingCat) {
-      updateCategory(editingCat.id, { name: catName.trim(), description: catDesc.trim() })
-    } else {
-      addCategory({ name: catName.trim(), description: catDesc.trim() })
-    }
     setCatDialogOpen(false)
+    loadData()
   }
 
-  function handleDeleteCat(id: string) {
-    const hasProducts = products.some((p) => p.categoryId === id)
-    if (hasProducts) {
-      alert("No se puede eliminar una categoria que tiene productos asociados.")
-      return
-    }
-    deleteCategory(id)
-  }
-
-  // Supplier handlers
-  function handleOpenCreateSup() {
-    setEditingSup(null)
+  async function handleSaveSupplier() {
+    if (!supName.trim()) return
+    await fetch('/api/suppliers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: supName.trim(),
+        identification: supIdent.trim(),
+        phone: supPhone.trim(),
+        email: supEmail.trim(),
+        address: supAddress.trim()
+      })
+    })
+    toast.success("Proveedor creado")
     setSupName("")
     setSupIdent("")
-    setSupContact("")
     setSupPhone("")
     setSupEmail("")
     setSupAddress("")
-    setSupDialogOpen(true)
-  }
-
-  function handleOpenEditSup(sup: Supplier) {
-    setEditingSup(sup)
-    setSupName(sup.name)
-    setSupIdent(sup.identification)
-    setSupContact(sup.contact)
-    setSupPhone(sup.phone)
-    setSupEmail(sup.email)
-    setSupAddress(sup.address)
-    setSupDialogOpen(true)
-  }
-
-  function handleSaveSup() {
-    if (!supName.trim()) return
-    const data = {
-      name: supName.trim(),
-      identification: supIdent.trim(),
-      contact: supContact.trim(),
-      phone: supPhone.trim(),
-      email: supEmail.trim(),
-      address: supAddress.trim(),
-    }
-    if (editingSup) {
-      updateSupplier(editingSup.id, data)
-    } else {
-      addSupplier(data)
-    }
     setSupDialogOpen(false)
-  }
-
-  function handleDeleteSup(id: string) {
-    const hasProducts = products.some((p) => p.supplierId === id)
-    if (hasProducts) {
-      alert("No se puede eliminar un proveedor que tiene productos asociados.")
-      return
-    }
-    deleteSupplier(id)
+    loadData()
   }
 
   return (
@@ -208,17 +155,15 @@ export default function ConfiguracionPage() {
                 </div>
                 <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button onClick={handleOpenCreateCat}>
+                    <Button>
                       <Plus className="mr-2 size-4" />
                       Nueva Categoria
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>{editingCat ? "Editar Categoria" : "Nueva Categoria"}</DialogTitle>
-                      <DialogDescription>
-                        {editingCat ? "Modifique los datos de la categoria" : "Ingrese los datos de la nueva categoria"}
-                      </DialogDescription>
+                      <DialogTitle>Nueva Categoria</DialogTitle>
+                      <DialogDescription>Ingrese los datos de la nueva categoria</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <div className="space-y-2">
@@ -232,7 +177,7 @@ export default function ConfiguracionPage() {
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setCatDialogOpen(false)}>Cancelar</Button>
-                      <Button onClick={handleSaveCat}>{editingCat ? "Guardar" : "Crear"}</Button>
+                      <Button onClick={handleSaveCategory}>Crear</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -256,23 +201,7 @@ export default function ConfiguracionPage() {
                         <TableCell className="font-medium text-foreground">{cat.name}</TableCell>
                         <TableCell className="text-muted-foreground">{cat.description}</TableCell>
                         <TableCell className="text-right text-foreground">{productCount}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenEditCat(cat)}>
-                              <Pencil className="size-4" />
-                              <span className="sr-only">Editar</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteCat(cat.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="size-4" />
-                              <span className="sr-only">Eliminar</span>
-                            </Button>
-                          </div>
-                        </TableCell>
+                        <TableCell className="text-right"></TableCell>
                       </TableRow>
                     )
                   })}
@@ -296,17 +225,15 @@ export default function ConfiguracionPage() {
                 </div>
                 <Dialog open={supDialogOpen} onOpenChange={setSupDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button onClick={handleOpenCreateSup}>
+                    <Button>
                       <Plus className="mr-2 size-4" />
                       Nuevo Proveedor
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg">
                     <DialogHeader>
-                      <DialogTitle>{editingSup ? "Editar Proveedor" : "Nuevo Proveedor"}</DialogTitle>
-                      <DialogDescription>
-                        {editingSup ? "Modifique los datos del proveedor" : "Ingrese los datos del nuevo proveedor"}
-                      </DialogDescription>
+                      <DialogTitle>Nuevo Proveedor</DialogTitle>
+                      <DialogDescription>Ingrese los datos del nuevo proveedor</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -317,10 +244,6 @@ export default function ConfiguracionPage() {
                         <div className="space-y-2">
                           <Label>RUC *</Label>
                           <Input value={supIdent} onChange={(e) => setSupIdent(e.target.value)} placeholder="RUC del proveedor" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Contacto</Label>
-                          <Input value={supContact} onChange={(e) => setSupContact(e.target.value)} placeholder="Persona de contacto" />
                         </div>
                       </div>
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -340,7 +263,7 @@ export default function ConfiguracionPage() {
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setSupDialogOpen(false)}>Cancelar</Button>
-                      <Button onClick={handleSaveSup}>{editingSup ? "Guardar" : "Crear"}</Button>
+                      <Button onClick={handleSaveSupplier}>Crear</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -366,27 +289,11 @@ export default function ConfiguracionPage() {
                       <TableRow key={sup.id}>
                         <TableCell className="font-medium text-foreground">{sup.name}</TableCell>
                         <TableCell className="text-muted-foreground">{sup.identification}</TableCell>
-                        <TableCell className="text-muted-foreground">{sup.contact}</TableCell>
+                        <TableCell className="text-muted-foreground">-</TableCell>
                         <TableCell className="text-muted-foreground">{sup.phone}</TableCell>
                         <TableCell className="text-muted-foreground">{sup.email}</TableCell>
                         <TableCell className="text-right text-foreground">{productCount}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenEditSup(sup)}>
-                              <Pencil className="size-4" />
-                              <span className="sr-only">Editar</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteSup(sup.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="size-4" />
-                              <span className="sr-only">Eliminar</span>
-                            </Button>
-                          </div>
-                        </TableCell>
+                        <TableCell className="text-right"></TableCell>
                       </TableRow>
                     )
                   })}

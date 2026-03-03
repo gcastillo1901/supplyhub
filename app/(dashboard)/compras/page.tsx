@@ -1,9 +1,8 @@
 "use client"
 
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import Link from "next/link"
-import { useState } from "react"
 import { Plus, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,15 +19,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { Purchase } from "@/lib/types"
+
+interface Purchase {
+  id: number
+  purchaseDate: string
+  total: number
+  supplier: { name: string }
+  details: Array<{
+    id: number
+    quantity: number
+    purchasePrice: number
+    subtotal: number
+    product: { name: string }
+  }>
+}
 
 export default function ComprasPage() {
-  const purchases = useAppStore((s) => s.purchases)
+  const [purchases, setPurchases] = useState<Purchase[]>([])
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null)
 
-  const sorted = [...purchases].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  useEffect(() => {
+    fetch('/api/purchases')
+      .then(res => res.json())
+      .then(setPurchases)
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -57,16 +71,16 @@ export default function ComprasPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.length > 0 ? (
-              sorted.map((purchase) => (
+            {purchases.length > 0 ? (
+              purchases.map((purchase) => (
                 <TableRow key={purchase.id}>
-                  <TableCell className="text-sm">{formatDate(purchase.createdAt)}</TableCell>
-                  <TableCell className="font-medium">{purchase.supplierName}</TableCell>
+                  <TableCell className="text-sm">{formatDate(purchase.purchaseDate)}</TableCell>
+                  <TableCell className="font-medium">{purchase.supplier.name}</TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground">
                     {purchase.details.length} item{purchase.details.length === 1 ? "" : "s"}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
-                    {formatCurrency(purchase.total)}
+                    {formatCurrency(Number(purchase.total))}
                   </TableCell>
                   <TableCell>
                     <Button
@@ -101,9 +115,9 @@ export default function ComprasPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="text-muted-foreground">Proveedor</div>
-                <div className="font-medium">{selectedPurchase.supplierName}</div>
+                <div className="font-medium">{selectedPurchase.supplier.name}</div>
                 <div className="text-muted-foreground">Fecha</div>
-                <div>{formatDate(selectedPurchase.createdAt)}</div>
+                <div>{formatDate(selectedPurchase.purchaseDate)}</div>
               </div>
               <div className="rounded-lg border">
                 <Table>
@@ -118,10 +132,10 @@ export default function ComprasPage() {
                   <TableBody>
                     {selectedPurchase.details.map((d) => (
                       <TableRow key={d.id}>
-                        <TableCell className="text-sm">{d.productName}</TableCell>
+                        <TableCell className="text-sm">{d.product.name}</TableCell>
                         <TableCell className="text-center">{d.quantity}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(d.unitPrice)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(d.subtotal)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(Number(d.purchasePrice))}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(Number(d.subtotal))}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -130,15 +144,15 @@ export default function ComprasPage() {
               <div className="space-y-1 text-sm text-right">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(selectedPurchase.subtotal)}</span>
+                  <span>{formatCurrency(Number(selectedPurchase.total))}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">IVA</span>
-                  <span>{formatCurrency(selectedPurchase.tax)}</span>
+                  <span>{formatCurrency(0)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-base pt-1 border-t">
                   <span>Total</span>
-                  <span>{formatCurrency(selectedPurchase.total)}</span>
+                  <span>{formatCurrency(Number(selectedPurchase.total))}</span>
                 </div>
               </div>
             </div>

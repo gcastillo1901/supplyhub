@@ -1,21 +1,23 @@
 "use client"
 
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
 export function RecentSales() {
-  const sales = useAppStore((s) => s.sales)
+  const [sales, setSales] = useState<any[]>([])
 
-  const recent = [...sales]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5)
+  useEffect(() => {
+    fetch('/api/sales')
+      .then(res => res.json())
+      .then(setSales)
+  }, [])
 
   const getPaymentMethodLabel = (method: string) => {
     if (method === "cash") return "Efectivo"
     if (method === "transfer") return "Transferencia"
-    return "Credito"
+    return "Crédito"
   }
 
   return (
@@ -24,16 +26,16 @@ export function RecentSales() {
         <CardTitle className="text-base">Ventas Recientes</CardTitle>
       </CardHeader>
       <CardContent>
-        {recent.length === 0 ? (
+        {sales.length === 0 ? (
           <p className="text-sm text-muted-foreground">No hay ventas recientes</p>
         ) : (
           <div className="space-y-3">
-            {recent.map((sale) => (
+            {sales.map((sale) => (
               <div key={sale.id} className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{sale.customerName}</p>
+                  <p className="text-sm font-medium truncate">{sale.customer?.name || "Cliente"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDate(sale.createdAt)}
+                    {formatDate(sale.saleDate)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 ml-2">
@@ -41,7 +43,7 @@ export function RecentSales() {
                     {getPaymentMethodLabel(sale.paymentMethod)}
                   </Badge>
                   <span className="text-sm font-semibold whitespace-nowrap">
-                    {formatCurrency(sale.total)}
+                    {formatCurrency(Number(sale.total))}
                   </span>
                 </div>
               </div>

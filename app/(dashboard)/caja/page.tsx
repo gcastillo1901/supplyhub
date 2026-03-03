@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,7 +14,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { DollarSign, ArrowUpCircle, ArrowDownCircle, Lock, Unlock, Plus, TrendingUp, TrendingDown, History } from "lucide-react"
 
 export default function CajaPage() {
-  const { cashRegister, cashHistory, openCashRegister, closeCashRegister, addCashMovement } = useAppStore()
+  const [cashRegister, setCashRegister] = useState<any>(null)
+  const [cashHistory, setCashHistory] = useState<any[]>([])
   const [openingAmount, setOpeningAmount] = useState("")
   const [closingAmount, setClosingAmount] = useState("")
   const [movementType, setMovementType] = useState<"income" | "expense">("income")
@@ -25,37 +25,68 @@ export default function CajaPage() {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false)
   const [movementDialogOpen, setMovementDialogOpen] = useState(false)
 
-  const totalIncome = cashRegister?.movements.filter((m) => m.type === "income").reduce((a, m) => a + m.amount, 0) ?? 0
-  const totalExpense = cashRegister?.movements.filter((m) => m.type === "expense").reduce((a, m) => a + m.amount, 0) ?? 0
+  const loadData = () => {
+    fetch('/api/cash-register')
+      .then(res => res.json())
+      .then(data => {
+        setCashRegister(data.currentRegister)
+        setCashHistory(data.history)
+      })
+  }
 
-  function handleOpenRegister() {
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const totalIncome = cashRegister?.movements?.filter((m: any) => m.movementType === "income").reduce((a: number, m: any) => a + Number(m.amount), 0) ?? 0
+  const totalExpense = cashRegister?.movements?.filter((m: any) => m.movementType === "expense").reduce((a: number, m: any) => a + Number(m.amount), 0) ?? 0
+  const expectedAmount = cashRegister ? Number(cashRegister.openingAmount) + totalIncome - totalExpense : 0
+
+  async function handleOpenRegister() {
     const amount = Number.parseFloat(openingAmount)
     if (Number.isNaN(amount) || amount < 0) return
-    openCashRegister(amount)
+    await fetch('/api/cash-register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'open', data: { amount } })
+    })
     setOpeningAmount("")
     setOpenDialogOpen(false)
+    loadData()
   }
 
-  function handleCloseRegister() {
+  async function handleCloseRegister() {
     const amount = Number.parseFloat(closingAmount)
     if (Number.isNaN(amount) || amount < 0) return
-    closeCashRegister(amount)
+    await fetch('/api/cash-register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'close', data: { closingAmount: amount } })
+    })
     setClosingAmount("")
     setCloseDialogOpen(false)
+    loadData()
   }
 
-  function handleAddMovement() {
+  async function handleAddMovement() {
     const amount = Number.parseFloat(movementAmount)
     if (Number.isNaN(amount) || amount <= 0 || !movementDescription.trim()) return
-    addCashMovement({
-      type: movementType,
-      amount,
-      description: movementDescription.trim(),
-      reference: "manual",
+    await fetch('/api/cash-register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'movement',
+        data: {
+          type: movementType,
+          amount,
+          description: movementDescription.trim()
+        }
+      })
     })
     setMovementAmount("")
     setMovementDescription("")
     setMovementDialogOpen(false)
+    loadData()
   }
 
   return (
@@ -133,7 +164,7 @@ export default function CajaPage() {
                   <DialogHeader>
                     <DialogTitle>Cerrar Caja</DialogTitle>
                     <DialogDescription>
-                      Monto esperado: <span className="font-bold text-foreground">{formatCurrency(cashRegister.expectedAmount)}</span>
+                      Monto esperado: <span className="font-bold text-foreground">{formatCurrency(expectedAmount)}</span>
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -151,8 +182,8 @@ export default function CajaPage() {
                     {closingAmount && (
                       <div className="rounded-lg border p-3">
                         <p className="text-sm text-muted-foreground">Diferencia:</p>
-                        <p className={`text-lg font-bold ${Number.parseFloat(closingAmount) - cashRegister.expectedAmount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                          {formatCurrency(Number.parseFloat(closingAmount) - cashRegister.expectedAmount)}
+                        <p className={`text-lg font-bold ${Number.parseFloat(closingAmount) - expectedAmount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {formatCurrency(Number.parseFloat(closingAmount) - expectedAmount)}
                         </p>
                       </div>
                     )}
@@ -216,7 +247,7 @@ export default function CajaPage() {
               {cashRegister ? "Abierta" : "Cerrada"}
             </Badge>
             {cashRegister && (
-              <p className="mt-1 text-xs text-muted-foreground">Desde {formatDate(cashRegister.openedAt)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Desde {formatDate(cashRegister.openingDate)}</p>
             )}
           </CardContent>
         </Card>
@@ -227,7 +258,7 @@ export default function CajaPage() {
             <DollarSign className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{formatCurrency(cashRegister?.expectedAmount ?? 0)}</div>
+            <div className="text-2xl font-bold text-foreground">{formatCurrency(expectedAmount)}</div>
             <p className="text-xs text-muted-foreground">Apertura: {formatCurrency(cashRegister?.openingAmount ?? 0)}</p>
           </CardContent>
         </Card>
@@ -239,7 +270,7 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-600">{formatCurrency(totalIncome)}</div>
-            <p className="text-xs text-muted-foreground">{cashRegister?.movements.filter((m) => m.type === "income").length ?? 0} movimientos</p>
+            <p className="text-xs text-muted-foreground">{cashRegister?.movements?.filter((m: any) => m.movementType === "income").length ?? 0} movimientos</p>
           </CardContent>
         </Card>
 
@@ -250,7 +281,7 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{formatCurrency(totalExpense)}</div>
-            <p className="text-xs text-muted-foreground">{cashRegister?.movements.filter((m) => m.type === "expense").length ?? 0} movimientos</p>
+            <p className="text-xs text-muted-foreground">{cashRegister?.movements?.filter((m: any) => m.movementType === "expense").length ?? 0} movimientos</p>
           </CardContent>
         </Card>
       </div>
@@ -276,10 +307,10 @@ export default function CajaPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...cashRegister.movements].reverse().map((m) => (
+                  {[...cashRegister.movements].reverse().map((m: any) => (
                     <TableRow key={m.id}>
                       <TableCell>
-                        {m.type === "income" ? (
+                        {m.movementType === "income" ? (
                           <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
                             <ArrowUpCircle className="mr-1 size-3" />
                             Ingreso
@@ -292,9 +323,9 @@ export default function CajaPage() {
                         )}
                       </TableCell>
                       <TableCell className="font-medium text-foreground">{m.description}</TableCell>
-                      <TableCell className="text-muted-foreground">{formatDate(m.createdAt)}</TableCell>
-                      <TableCell className={`text-right font-mono font-medium ${m.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                        {m.type === "income" ? "+" : "-"}{formatCurrency(m.amount)}
+                      <TableCell className="text-muted-foreground">{formatDate(m.movementDate)}</TableCell>
+                      <TableCell className={`text-right font-mono font-medium ${m.movementType === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                        {m.movementType === "income" ? "+" : "-"}{formatCurrency(Number(m.amount))}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -332,13 +363,13 @@ export default function CajaPage() {
               <TableBody>
                 {[...cashHistory].reverse().map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell className="text-muted-foreground">{formatDate(r.openedAt)}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.closedAt ? formatDate(r.closedAt) : "-"}</TableCell>
-                    <TableCell className="text-right font-mono text-foreground">{formatCurrency(r.openingAmount)}</TableCell>
-                    <TableCell className="text-right font-mono text-foreground">{formatCurrency(r.expectedAmount)}</TableCell>
-                    <TableCell className="text-right font-mono text-foreground">{formatCurrency(r.closingAmount ?? 0)}</TableCell>
-                    <TableCell className={`text-right font-mono font-medium ${(r.difference ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                      {formatCurrency(r.difference ?? 0)}
+                    <TableCell className="text-muted-foreground">{formatDate(r.openingDate)}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.closingDate ? formatDate(r.closingDate) : "-"}</TableCell>
+                    <TableCell className="text-right font-mono text-foreground">{formatCurrency(Number(r.openingAmount))}</TableCell>
+                    <TableCell className="text-right font-mono text-foreground">{formatCurrency(Number(r.openingAmount))}</TableCell>
+                    <TableCell className="text-right font-mono text-foreground">{formatCurrency(Number(r.closingAmount ?? 0))}</TableCell>
+                    <TableCell className={`text-right font-mono font-medium ${Number(r.difference ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {formatCurrency(Number(r.difference ?? 0))}
                     </TableCell>
                   </TableRow>
                 ))}

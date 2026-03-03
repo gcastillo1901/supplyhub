@@ -1,8 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { useAppStore } from "@/lib/store"
-import type { Product } from "@/lib/types"
+import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,13 +15,19 @@ import { ProductTable } from "@/components/inventory/product-table"
 import { ProductForm } from "@/components/inventory/product-form"
 
 export default function InventarioPage() {
-  const categories = useAppStore((s) => s.categories)
+  const [categories, setCategories] = useState<any[]>([])
   const [search, setSearch] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [formOpen, setFormOpen] = useState(false)
-  const [editProduct, setEditProduct] = useState<Product | null>(null)
+  const [editProduct, setEditProduct] = useState<any>(null)
 
-  const handleEdit = (product: Product) => {
+  useEffect(() => {
+    fetch('/api/categories')
+      .then(res => res.json())
+      .then(setCategories)
+  }, [])
+
+  const handleEdit = (product: any) => {
     setEditProduct(product)
     setFormOpen(true)
   }

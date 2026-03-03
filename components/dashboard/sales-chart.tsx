@@ -1,30 +1,25 @@
 "use client"
 
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts"
 
 export function SalesChart() {
-  const sales = useAppStore((s) => s.sales)
+  const [data, setData] = useState<any[]>([])
 
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date()
-    date.setDate(date.getDate() - (6 - i))
-    return date
-  })
-
-  const data = last7Days.map((date) => {
-    const dayStr = date.toDateString()
-    const daySales = sales.filter(
-      (s) => new Date(s.createdAt).toDateString() === dayStr && s.status === "completed"
-    )
-    return {
-      day: date.toLocaleDateString("es-NI", { weekday: "short" }),
-      total: daySales.reduce((acc, s) => acc + s.total, 0),
-      count: daySales.length,
-    }
-  })
+  useEffect(() => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date()
+      date.setDate(date.getDate() - (6 - i))
+      return {
+        day: date.toLocaleDateString("es-NI", { weekday: "short" }),
+        total: 0,
+        count: 0
+      }
+    })
+    setData(last7Days)
+  }, [])
 
   return (
     <Card>
@@ -47,7 +42,7 @@ export function SalesChart() {
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) => `L${(v / 1000).toFixed(0)}k`}
+                tickFormatter={(v) => `C$${(v / 1000).toFixed(0)}k`}
               />
               <Tooltip
                 formatter={(value: number) => [formatCurrency(value), "Total"]}

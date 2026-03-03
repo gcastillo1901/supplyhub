@@ -1,46 +1,45 @@
 "use client"
 
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { formatCurrency } from "@/lib/utils"
 import { DollarSign, ShoppingCart, AlertTriangle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export function SummaryCards() {
-  const sales = useAppStore((s) => s.sales)
-  const products = useAppStore((s) => s.products)
-  const cashRegister = useAppStore((s) => s.cashRegister)
+  const [stats, setStats] = useState<any>(null)
 
-  const today = new Date().toDateString()
-  const todaySales = sales.filter(
-    (s) => new Date(s.createdAt).toDateString() === today && s.status === "completed"
-  )
-  const todayRevenue = todaySales.reduce((acc, s) => acc + s.total, 0)
-  const lowStockProducts = products.filter((p) => p.stock <= p.minStock)
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then(res => res.json())
+      .then(setStats)
+  }, [])
+
+  if (!stats) return null
 
   const cards = [
     {
       title: "Ventas Hoy",
-      value: todaySales.length.toString(),
+      value: stats.todaySalesCount.toString(),
       description: "transacciones completadas",
       icon: ShoppingCart,
     },
     {
       title: "Ingresos Hoy",
-      value: formatCurrency(todayRevenue),
+      value: formatCurrency(stats.todayRevenue),
       description: "en ventas del dia",
       icon: DollarSign,
     },
     {
       title: "Stock Bajo",
-      value: lowStockProducts.length.toString(),
+      value: stats.lowStockCount.toString(),
       description: "productos por reabastecer",
       icon: AlertTriangle,
-      alert: lowStockProducts.length > 0,
+      alert: stats.lowStockCount > 0,
     },
     {
       title: "Estado Caja",
-      value: cashRegister ? formatCurrency(cashRegister.expectedAmount) : "Cerrada",
-      description: cashRegister ? "caja abierta" : "sin caja activa",
+      value: stats.cashRegister ? formatCurrency(stats.cashRegister.openingAmount) : "Cerrada",
+      description: stats.cashRegister ? "caja abierta" : "sin caja activa",
       icon: DollarSign,
     },
   ]

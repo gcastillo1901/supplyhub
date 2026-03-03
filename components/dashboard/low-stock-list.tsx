@@ -1,20 +1,17 @@
 "use client"
 
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
 export function LowStockList() {
-  const products = useAppStore((s) => s.products)
-  const categories = useAppStore((s) => s.categories)
+  const [lowStock, setLowStock] = useState<any[]>([])
 
-  const lowStock = products
-    .filter((p) => p.stock <= p.minStock)
-    .sort((a, b) => a.stock - b.stock)
-    .slice(0, 8)
-
-  const getCategoryName = (id: string) =>
-    categories.find((c) => c.id === id)?.name || "Sin categoria"
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then(res => res.json())
+      .then(data => setLowStock(data.lowStockProducts || []))
+  }, [])
 
   return (
     <Card>
@@ -36,7 +33,7 @@ export function LowStockList() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{product.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {getCategoryName(product.categoryId)}
+                    {product.category?.name || "Sin categoria"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 ml-2">
@@ -48,7 +45,7 @@ export function LowStockList() {
                         : "bg-chart-4/20 text-foreground hover:bg-chart-4/30"
                     }
                   >
-                    {product.stock} / {product.minStock}
+                    {product.stock} / {product.minimumStock}
                   </Badge>
                 </div>
               </div>

@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { useAppStore } from "@/lib/store"
+import { useState, useMemo, useEffect } from "react"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -13,87 +12,24 @@ import { Download, TrendingUp, TrendingDown, DollarSign, Package } from "lucide-
 
 const COLORS = ["oklch(0.65 0.17 55)", "oklch(0.55 0.12 180)", "oklch(0.45 0.08 230)", "oklch(0.75 0.15 85)", "oklch(0.6 0.16 35)"]
 
-function calculateSalesByCategory(
-  sales: any[],
-  products: any[],
-  categories: any[]
-) {
-  const catMap: Record<string, number> = {}
-  for (const sale of sales) {
-    for (const detail of sale.details) {
-      const product = products.find((p) => p.id === detail.productId)
-      if (!product) continue
-      const cat = categories.find((c) => c.id === product.categoryId)
-      const catName = cat?.name ?? "Sin categoria"
-      catMap[catName] = (catMap[catName] || 0) + detail.subtotal
-    }
-  }
-  return Object.entries(catMap)
-    .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
-    .sort((a, b) => b.value - a.value)
-}
-
-function calculateTopProducts(sales: any[]) {
-  const prodMap: Record<string, { name: string; quantity: number; revenue: number }> = {}
-  for (const sale of sales) {
-    for (const detail of sale.details) {
-      if (!prodMap[detail.productId]) {
-        prodMap[detail.productId] = { name: detail.productName, quantity: 0, revenue: 0 }
-      }
-      prodMap[detail.productId].quantity += detail.quantity
-      prodMap[detail.productId].revenue += detail.subtotal
-    }
-  }
-  return Object.values(prodMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
-}
-
-function calculateTopCustomers(sales: any[]) {
-  const custMap: Record<string, { name: string; count: number; total: number }> = {}
-  for (const sale of sales) {
-    const key = sale.customerName
-    if (!custMap[key]) custMap[key] = { name: key, count: 0, total: 0 }
-    custMap[key].count += 1
-    custMap[key].total += sale.total
-  }
-  return Object.values(custMap).sort((a, b) => b.total - a.total).slice(0, 10)
-}
-
-function calculatePaymentMethods(sales: any[]) {
-  const methods: Record<string, number> = { cash: 0, transfer: 0, credit: 0 }
-  for (const sale of sales) {
-    methods[sale.paymentMethod] += sale.total
-  }
-  const labels: Record<string, string> = { cash: "Efectivo", transfer: "Transferencia", credit: "Credito" }
-  return Object.entries(methods)
-    .filter(([, v]) => v > 0)
-    .map(([key, value]) => ({ name: labels[key], value: Math.round(value * 100) / 100 }))
-}
-
 export default function ReportesPage() {
-  const { sales, purchases, products, categories } = useAppStore()
+  const [sales, setSales] = useState<any[]>([])
+  const [purchases, setPurchases] = useState<any[]>([])
   const [period, setPeriod] = useState("7")
 
-  const cutoff = useMemo(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - Number.parseInt(period))
-    return d
+  useEffect(() => {
+    fetch(`/api/reports?days=${period}`)
+      .then(res => res.json())
+      .then(data => {
+        setSales(data.sales || [])
+        setPurchases(data.purchases || [])
+      })
   }, [period])
 
-  const filteredSales = useMemo(
-    () => sales.filter((s) => s.status === "completed" && new Date(s.createdAt) >= cutoff),
-    [sales, cutoff]
-  )
-
-  const filteredPurchases = useMemo(
-    () => purchases.filter((p) => new Date(p.createdAt) >= cutoff),
-    [purchases, cutoff]
-  )
-
-  const totalSales = filteredSales.reduce((a, s) => a + s.total, 0)
-  const totalPurchases = filteredPurchases.reduce((a, p) => a + p.total, 0)
+  const totalSales = sales.reduce((a, s) => a + Number(s.total), 0)
+  const totalPurchases = purchases.reduce((a, p) => a + Number(p.total), 0)
   const profit = totalSales - totalPurchases
 
-  // Sales by day
   const salesByDay = useMemo(() => {
     const days: Record<string, number> = {}
     for (let i = Number.parseInt(period) - 1; i >= 0; i--) {
@@ -102,42 +38,68 @@ export default function ReportesPage() {
       const key = d.toLocaleDateString("es-NI", { month: "short", day: "numeric" })
       days[key] = 0
     }
-    filteredSales.forEach((s) => {
-      const key = new Date(s.createdAt).toLocaleDateString("es-NI", { month: "short", day: "numeric" })
-      if (days[key] !== undefined) days[key] += s.total
+    sales.forEach((s) => {
+      const key = new Date(s.saleDate).toLocaleDateString("es-NI", { month: "short", day: "numeric" })
+      if (days[key] !== undefined) days[key] += Number(s.total)
     })
-    return Object.entries(days).map(([name, total]) => ({ name, total: Math.round(total * 100) / 100 }))
-  }, [filteredSales, period])
+    return Object.entries(days).map(([name, total]) => ({ name, total }))
+  }, [sales, period])
 
-  // Sales by category
-  const salesByCategory = useMemo(
-    () => calculateSalesByCategory(filteredSales, products, categories),
-    [filteredSales, products, categories]
-  )
+  const salesByCategory = useMemo(() => {
+    const catMap: Record<string, number> = {}
+    for (const sale of sales) {
+      for (const detail of sale.details) {
+        const catName = detail.product?.category?.name || "Sin categoria"
+        catMap[catName] = (catMap[catName] || 0) + Number(detail.subtotal)
+      }
+    }
+    return Object.entries(catMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [sales])
 
-  // Top products
-  const topProducts = useMemo(
-    () => calculateTopProducts(filteredSales),
-    [filteredSales]
-  )
+  const topProducts = useMemo(() => {
+    const prodMap: Record<string, { name: string; quantity: number; revenue: number }> = {}
+    for (const sale of sales) {
+      for (const detail of sale.details) {
+        const key = detail.product.name
+        if (!prodMap[key]) {
+          prodMap[key] = { name: key, quantity: 0, revenue: 0 }
+        }
+        prodMap[key].quantity += detail.quantity
+        prodMap[key].revenue += Number(detail.subtotal)
+      }
+    }
+    return Object.values(prodMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
+  }, [sales])
 
-  // Top customers
-  const topCustomers = useMemo(
-    () => calculateTopCustomers(filteredSales),
-    [filteredSales]
-  )
+  const topCustomers = useMemo(() => {
+    const custMap: Record<string, { name: string; count: number; total: number }> = {}
+    for (const sale of sales) {
+      const key = sale.customer?.name || "Cliente"
+      if (!custMap[key]) custMap[key] = { name: key, count: 0, total: 0 }
+      custMap[key].count += 1
+      custMap[key].total += Number(sale.total)
+    }
+    return Object.values(custMap).sort((a, b) => b.total - a.total).slice(0, 10)
+  }, [sales])
 
-  // Payment methods
-  const paymentMethods = useMemo(
-    () => calculatePaymentMethods(filteredSales),
-    [filteredSales]
-  )
+  const paymentMethods = useMemo(() => {
+    const methods: Record<string, number> = { cash: 0, transfer: 0 }
+    for (const sale of sales) {
+      methods[sale.paymentMethod] = (methods[sale.paymentMethod] || 0) + Number(sale.total)
+    }
+    const labels: Record<string, string> = { cash: "Efectivo", transfer: "Transferencia" }
+    return Object.entries(methods)
+      .filter(([, v]) => v > 0)
+      .map(([key, value]) => ({ name: labels[key], value }))
+  }, [sales])
 
   function exportCSV() {
     const header = "Fecha,Cliente,Subtotal,IVA,Total,Metodo Pago\n"
-    const rows = filteredSales
+    const rows = sales
       .map((s) =>
-        `${new Date(s.createdAt).toLocaleDateString("es-NI")},${s.customerName},${s.subtotal},${s.tax},${s.total},${s.paymentMethod}`
+        `${new Date(s.saleDate).toLocaleDateString("es-NI")},${s.customer?.name || "Cliente"},${s.subtotal},${s.tax},${s.total},${s.paymentMethod}`
       )
       .join("\n")
     const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" })
@@ -184,7 +146,7 @@ export default function ReportesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{formatCurrency(totalSales)}</div>
-            <p className="text-xs text-muted-foreground">{filteredSales.length} ventas</p>
+            <p className="text-xs text-muted-foreground">{sales.length} ventas</p>
           </CardContent>
         </Card>
         <Card>
@@ -194,7 +156,7 @@ export default function ReportesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{formatCurrency(totalPurchases)}</div>
-            <p className="text-xs text-muted-foreground">{filteredPurchases.length} compras</p>
+            <p className="text-xs text-muted-foreground">{purchases.length} compras</p>
           </CardContent>
         </Card>
         <Card>
@@ -216,7 +178,7 @@ export default function ReportesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
-              {filteredSales.length > 0 ? formatCurrency(totalSales / filteredSales.length) : formatCurrency(0)}
+              {sales.length > 0 ? formatCurrency(totalSales / sales.length) : formatCurrency(0)}
             </div>
             <p className="text-xs text-muted-foreground">Por venta</p>
           </CardContent>

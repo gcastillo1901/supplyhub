@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAppStore } from "@/lib/store"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowLeft, Plus, Trash2, ShoppingCart, Search } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 
 interface CartItem {
-  productId: string
+  productId: number
   productName: string
   quantity: number
   unitPrice: number
@@ -23,7 +23,8 @@ interface CartItem {
 
 export default function NuevaCompraPage() {
   const router = useRouter()
-  const { suppliers, products, config, createPurchase } = useAppStore()
+  const [suppliers, setSuppliers] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
   const [supplierId, setSupplierId] = useState("")
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchProduct, setSearchProduct] = useState("")
@@ -31,7 +32,12 @@ export default function NuevaCompraPage() {
   const [quantity, setQuantity] = useState("1")
   const [unitPrice, setUnitPrice] = useState("")
 
-  const selectedSupplier = suppliers.find((s) => s.id === supplierId)
+  useEffect(() => {
+    fetch('/api/suppliers').then(res => res.json()).then(setSuppliers)
+    fetch('/api/products').then(res => res.json()).then(setProducts)
+  }, [])
+
+  const selectedSupplier = suppliers.find((s) => s.id === Number(supplierId))
 
   const filteredProducts = useMemo(() => {
     if (!searchProduct.trim()) return products
@@ -44,14 +50,13 @@ export default function NuevaCompraPage() {
   }, [products, searchProduct])
 
   const subtotal = cart.reduce((a, item) => a + item.subtotal, 0)
-  const tax = subtotal * (config.taxRate / 100)
-  const total = subtotal + tax
+  const total = subtotal
 
   function handleAddToCart() {
-    const product = products.find((p) => p.id === selectedProductId)
+    const product = products.find((p) => p.id === Number(selectedProductId))
     if (!product) return
     const qty = Number.parseInt(quantity)
-    const price = Number.parseFloat(unitPrice) || product.purchasePrice
+    const price = Number.parseFloat(unitPrice) || Number(product.purchasePrice)
     if (qty <= 0) return
 
     const existing = cart.find((item) => item.productId === product.id)
@@ -76,29 +81,28 @@ export default function NuevaCompraPage() {
     setSearchProduct("")
   }
 
-  function handleRemoveFromCart(productId: string) {
+  function handleRemoveFromCart(productId: number) {
     setCart(cart.filter((item) => item.productId !== productId))
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!supplierId || cart.length === 0) return
-    createPurchase({
-      supplierId,
-      supplierName: selectedSupplier?.name ?? "",
-      details: cart.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        subtotal: item.subtotal,
-      })),
+    await fetch('/api/purchases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        supplierId: Number(supplierId),
+        total,
+        details: cart
+      })
     })
+    toast.success("Compra registrada exitosamente")
     router.push("/compras")
   }
 
   function handleSelectProduct(productId: string) {
     setSelectedProductId(productId)
-    const product = products.find((p) => p.id === productId)
+    const product = products.find((p) => p.id === Number(productId))
     if (product) {
       setUnitPrice(product.purchasePrice.toString())
     }
@@ -120,7 +124,6 @@ export default function NuevaCompraPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left: Product selection */}
         <div className="space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
@@ -133,7 +136,7 @@ export default function NuevaCompraPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -165,12 +168,12 @@ export default function NuevaCompraPage() {
                           key={p.id}
                           className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
                           onClick={() => {
-                            handleSelectProduct(p.id)
+                            handleSelectProduct(p.id.toString())
                             setSearchProduct(p.name)
                           }}
                         >
                           <span>{p.code} - {p.name}</span>
-                          <span className="text-muted-foreground">{formatCurrency(p.purchasePrice)}</span>
+                          <span className="text-muted-foreground">{formatCurrency(Number(p.purchasePrice))}</span>
                         </button>
                       ))}
                     </div>
@@ -206,7 +209,6 @@ export default function NuevaCompraPage() {
             </CardContent>
           </Card>
 
-          {/* Cart table */}
           <Card>
             <CardHeader>
               <CardTitle>Detalle de Compra</CardTitle>
@@ -248,7 +250,6 @@ export default function NuevaCompraPage() {
           </Card>
         </div>
 
-        {/* Right: Summary */}
         <div>
           <Card className="sticky top-6">
             <CardHeader>
@@ -271,10 +272,6 @@ export default function NuevaCompraPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="font-mono text-foreground">{formatCurrency(subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">IVA ({config.taxRate}%)</span>
-                  <span className="font-mono text-foreground">{formatCurrency(tax)}</span>
                 </div>
                 <hr className="border-border" />
                 <div className="flex justify-between text-lg font-bold">

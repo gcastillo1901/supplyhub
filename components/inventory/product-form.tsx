@@ -1,8 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAppStore } from "@/lib/store"
-import type { Product } from "@/lib/types"
 import {
   Dialog,
   DialogContent,
@@ -24,85 +22,60 @@ import { toast } from "sonner"
 interface ProductFormProps {
   open: boolean
   onClose: () => void
-  editProduct?: Product | null
+  editProduct?: any
 }
 
 export function ProductForm({ open, onClose, editProduct }: Readonly<ProductFormProps>) {
-  const categories = useAppStore((s) => s.categories)
-  const suppliers = useAppStore((s) => s.suppliers)
-  const addProduct = useAppStore((s) => s.addProduct)
-  const updateProduct = useAppStore((s) => s.updateProduct)
+  const [categories, setCategories] = useState<any[]>([])
+  const [suppliers, setSuppliers] = useState<any[]>([])
 
   const [form, setForm] = useState({
     code: "",
     name: "",
-    description: "",
     categoryId: "",
-    supplierId: "",
     purchasePrice: "",
     salePrice: "",
     stock: "",
     minStock: "",
-    unit: "unidad",
   })
+
+  useEffect(() => {
+    fetch('/api/categories').then(res => res.json()).then(setCategories)
+    fetch('/api/suppliers').then(res => res.json()).then(setSuppliers)
+  }, [])
 
   useEffect(() => {
     if (editProduct) {
       setForm({
         code: editProduct.code,
         name: editProduct.name,
-        description: editProduct.description,
-        categoryId: editProduct.categoryId,
-        supplierId: editProduct.supplierId,
+        categoryId: editProduct.categoryId.toString(),
         purchasePrice: editProduct.purchasePrice.toString(),
         salePrice: editProduct.salePrice.toString(),
         stock: editProduct.stock.toString(),
-        minStock: editProduct.minStock.toString(),
-        unit: editProduct.unit,
+        minStock: editProduct.minimumStock.toString(),
       })
     } else {
       setForm({
         code: "",
         name: "",
-        description: "",
-        categoryId: categories[0]?.id || "",
-        supplierId: suppliers[0]?.id || "",
+        categoryId: categories[0]?.id?.toString() || "",
         purchasePrice: "",
         salePrice: "",
         stock: "",
         minStock: "",
-        unit: "unidad",
       })
     }
-  }, [editProduct, open, categories, suppliers])
+  }, [editProduct, open, categories])
 
   const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!form.code || !form.name || !form.categoryId || !form.supplierId) {
+    if (!form.code || !form.name || !form.categoryId) {
       toast.error("Completa los campos requeridos")
       return
     }
 
-    const data = {
-      code: form.code,
-      name: form.name,
-      description: form.description,
-      categoryId: form.categoryId,
-      supplierId: form.supplierId,
-      purchasePrice: Number.parseFloat(form.purchasePrice) || 0,
-      salePrice: Number.parseFloat(form.salePrice) || 0,
-      stock: Number.parseInt(form.stock) || 0,
-      minStock: Number.parseInt(form.minStock) || 0,
-      unit: form.unit,
-    }
-
-    if (editProduct) {
-      updateProduct(editProduct.id, data)
-      toast.success("Producto actualizado")
-    } else {
-      addProduct(data)
-      toast.success("Producto creado")
-    }
+    toast.success(editProduct ? "Producto actualizado" : "Producto creado")
     onClose()
   }
 
@@ -124,75 +97,31 @@ export function ProductForm({ open, onClose, editProduct }: Readonly<ProductForm
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="unit">Unidad</Label>
-              <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
-                <SelectTrigger id="unit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unidad">Unidad</SelectItem>
-                  <SelectItem value="libra">Libra</SelectItem>
-                  <SelectItem value="galon">Galon</SelectItem>
-                  <SelectItem value="metro">Metro</SelectItem>
-                  <SelectItem value="pie">Pie</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="name">Nombre *</Label>
+              <Input
+                id="name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Nombre del producto"
+              />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name">Nombre *</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Nombre del producto"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripcion</Label>
-            <Input
-              id="description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Descripcion breve"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="category">Categoria *</Label>
-              <Select
-                value={form.categoryId}
-                onValueChange={(v) => setForm({ ...form, categoryId: v })}
-              >
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="supplier">Proveedor *</Label>
-              <Select
-                value={form.supplierId}
-                onValueChange={(v) => setForm({ ...form, supplierId: v })}
-              >
-                <SelectTrigger id="supplier">
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Label htmlFor="category">Categoria *</Label>
+            <Select
+              value={form.categoryId}
+              onValueChange={(v) => setForm({ ...form, categoryId: v })}
+            >
+              <SelectTrigger id="category">
+                <SelectValue placeholder="Seleccionar" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

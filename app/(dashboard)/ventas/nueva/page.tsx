@@ -1,10 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAppStore } from "@/lib/store"
 import { formatCurrency } from "@/lib/utils"
-import type { PaymentMethod } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,7 +27,7 @@ import { toast } from "sonner"
 import Link from "next/link"
 
 interface CartItem {
-  productId: string
+  productId: number
   productName: string
   quantity: number
   unitPrice: number
@@ -39,15 +37,18 @@ interface CartItem {
 
 export default function NuevaVentaPage() {
   const router = useRouter()
-  const products = useAppStore((s) => s.products)
-  const customers = useAppStore((s) => s.customers)
-  const config = useAppStore((s) => s.config)
-  const createSale = useAppStore((s) => s.createSale)
-
+  const [products, setProducts] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
   const [search, setSearch] = useState("")
+  const [customerSearch, setCustomerSearch] = useState("")
   const [cart, setCart] = useState<CartItem[]>([])
-  const [customerId, setCustomerId] = useState("cust-1")
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash")
+  const [customerId, setCustomerId] = useState<number>(1)
+  const [paymentMethod, setPaymentMethod] = useState("cash")
+
+  useEffect(() => {
+    fetch('/api/products').then(res => res.json()).then(setProducts)
+    fetch('/api/customers').then(res => res.json()).then(setCustomers)
+  }, [])
 
   const filteredProducts = search.length >= 1
     ? products.filter(
@@ -57,7 +58,13 @@ export default function NuevaVentaPage() {
       ).slice(0, 8)
     : []
 
-  const addToCart = (productId: string) => {
+  const filteredCustomers = customerSearch.length >= 1
+    ? customers.filter((c) =>
+        c.name.toLowerCase().includes(customerSearch.toLowerCase())
+      ).slice(0, 5)
+    : customers
+
+  const addToCart = (productId: number) => {
     const product = products.find((p) => p.id === productId)
     if (!product) return
 
@@ -94,7 +101,7 @@ export default function NuevaVentaPage() {
     setSearch("")
   }
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQuantity = (productId: number, delta: number) => {
     setCart(
       cart
         .map((item) => {
@@ -111,34 +118,31 @@ export default function NuevaVentaPage() {
     )
   }
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = (productId: number) => {
     setCart(cart.filter((item) => item.productId !== productId))
   }
 
   const subtotal = cart.reduce((acc, item) => acc + item.subtotal, 0)
-  const tax = subtotal * (config.taxRate / 100)
+  const tax = subtotal * 0.15
   const total = subtotal + tax
 
-  const handleCompleteSale = () => {
+  const handleCompleteSale = async () => {
     if (cart.length === 0) {
       toast.error("Agrega productos a la venta")
       return
     }
 
-    const customer = customers.find((c) => c.id === customerId)
-
-    createSale({
-      customerId,
-      customerName: customer?.name || "Contado",
-      details: cart.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        subtotal: item.subtotal,
-      })),
-      paymentMethod,
-      taxRate: config.taxRate,
+    await fetch('/api/sales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId,
+        paymentMethod,
+        subtotal,
+        tax,
+        total,
+        details: cart
+      })
     })
 
     toast.success("Venta completada exitosamente")
@@ -287,23 +291,36 @@ export default function NuevaVentaPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Select value={customerId} onValueChange={setCustomerId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <Input
+                    placeholder="Buscar cliente..."
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                  />
+                  {customerSearch.length > 0 && filteredCustomers.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 max-h-40 overflow-y-auto rounded-md border bg-popover p-1">
+                      {filteredCustomers.map((c) => (
+                        <button
+                          key={c.id}
+                          className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                          onClick={() => {
+                            setCustomerId(c.id)
+                            setCustomerSearch(c.name)
+                          }}
+                        >
+                          <span>{c.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Metodo de Pago</Label>
                 <Select
                   value={paymentMethod}
-                  onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+                  onValueChange={setPaymentMethod}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -322,7 +339,7 @@ export default function NuevaVentaPage() {
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">IVA ({config.taxRate}%)</span>
+                  <span className="text-muted-foreground">IVA (15%)</span>
                   <span>{formatCurrency(tax)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-lg pt-2 border-t">

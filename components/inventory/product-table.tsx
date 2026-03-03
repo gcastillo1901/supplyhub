@@ -1,8 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { useAppStore } from "@/lib/store"
-import type { Product } from "@/lib/types"
+import { useState, useEffect } from "react"
 import { formatCurrency } from "@/lib/utils"
 import {
   Table,
@@ -27,33 +25,45 @@ import {
 import { Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+interface Product {
+  id: number
+  code: string
+  name: string
+  categoryId: number
+  purchasePrice: number
+  salePrice: number
+  stock: number
+  minimumStock: number
+  category: { id: number; name: string }
+}
+
 interface ProductTableProps {
   search: string
   categoryFilter: string
-  onEdit: (product: Product) => void
+  onEdit: (product: any) => void
 }
 
 export function ProductTable({ search, categoryFilter, onEdit }: Readonly<ProductTableProps>) {
-  const products = useAppStore((s) => s.products)
-  const categories = useAppStore((s) => s.categories)
-  const deleteProduct = useAppStore((s) => s.deleteProduct)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
+  const [deleteId, setDeleteId] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('/api/products')
+      .then(res => res.json())
+      .then(setProducts)
+  }, [])
 
   const filtered = products.filter((p) => {
     const matchSearch =
       search === "" ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.code.toLowerCase().includes(search.toLowerCase())
-    const matchCategory = categoryFilter === "all" || p.categoryId === categoryFilter
+    const matchCategory = categoryFilter === "all" || p.categoryId === Number(categoryFilter)
     return matchSearch && matchCategory
   })
 
-  const getCategoryName = (id: string) =>
-    categories.find((c) => c.id === id)?.name || "-"
-
   const handleDelete = () => {
     if (deleteId) {
-      deleteProduct(deleteId)
       toast.success("Producto eliminado")
       setDeleteId(null)
     }
@@ -87,19 +97,19 @@ export function ProductTable({ search, categoryFilter, onEdit }: Readonly<Produc
                   <TableCell className="font-mono text-xs">{product.code}</TableCell>
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground">
-                    {getCategoryName(product.categoryId)}
+                    {product.category?.name || "-"}
                   </TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(product.purchasePrice)}
+                    {formatCurrency(Number(product.purchasePrice))}
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatCurrency(product.salePrice)}
+                    {formatCurrency(Number(product.salePrice))}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
-                      variant={product.stock <= product.minStock ? "destructive" : "secondary"}
+                      variant={product.stock <= product.minimumStock ? "destructive" : "secondary"}
                       className={
-                        product.stock <= product.minStock
+                        product.stock <= product.minimumStock
                           ? "bg-destructive/10 text-destructive"
                           : ""
                       }

@@ -1,6 +1,5 @@
 "use client"
-import { useState } from "react"
-import { useAppStore } from "@/lib/store"
+import { useState, useEffect } from "react"
 import { formatCurrency, formatDateShort } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,94 +10,49 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Plus, Search, Pencil, Trash2, Phone, Mail } from "lucide-react"
-import type { Customer, CustomerType } from "@/lib/types"
+
+interface Customer {
+  id: number
+  name: string
+  identification: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  customerType: string
+  creditLimit: number
+  currentBalance: number
+  createdAt: string
+}
 
 export default function ClientesPage() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer } = useAppStore()
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [search, setSearch] = useState("")
   const [filterType, setFilterType] = useState<string>("all")
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
 
-  const [name, setName] = useState("")
-  const [identification, setIdentification] = useState("")
-  const [phone, setPhone] = useState("")
-  const [email, setEmail] = useState("")
-  const [address, setAddress] = useState("")
-  const [customerType, setCustomerType] = useState<CustomerType>("retail")
-  const [creditLimit, setCreditLimit] = useState("0")
+  useEffect(() => {
+    fetch('/api/customers')
+      .then(res => res.json())
+      .then(setCustomers)
+  }, [])
 
   const filtered = customers.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.identification.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone.includes(search)
-    const matchesType = filterType === "all" || c.type === filterType
+      (c.identification && c.identification.toLowerCase().includes(search.toLowerCase())) ||
+      (c.phone && c.phone.includes(search))
+    const matchesType = filterType === "all" || c.customerType === filterType
     return matchesSearch && matchesType
   })
 
-  function resetForm() {
-    setName("")
-    setIdentification("")
-    setPhone("")
-    setEmail("")
-    setAddress("")
-    setCustomerType("retail")
-    setCreditLimit("0")
-    setEditingCustomer(null)
+  function handleDelete(id: number) {}
+
+  const typeLabel: Record<string, string> = {
+    cash: "Contado",
+    credit: "Crédito",
   }
 
-  function handleOpenCreate() {
-    resetForm()
-    setDialogOpen(true)
-  }
-
-  function handleOpenEdit(customer: Customer) {
-    setEditingCustomer(customer)
-    setName(customer.name)
-    setIdentification(customer.identification)
-    setPhone(customer.phone)
-    setEmail(customer.email)
-    setAddress(customer.address)
-    setCustomerType(customer.type)
-    setCreditLimit(customer.creditLimit.toString())
-    setDialogOpen(true)
-  }
-
-  function handleSave() {
-    if (!name.trim()) return
-    const data = {
-      name: name.trim(),
-      identification: identification.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-      address: address.trim(),
-      type: customerType,
-      creditLimit: Number.parseFloat(creditLimit) || 0,
-    }
-    if (editingCustomer) {
-      updateCustomer(editingCustomer.id, data)
-    } else {
-      addCustomer(data)
-    }
-    setDialogOpen(false)
-    resetForm()
-  }
-
-  function handleDelete(id: string) {
-    if (id === "cust-1") return // Protect default customer
-    deleteCustomer(id)
-  }
-
-  const typeLabel: Record<CustomerType, string> = {
-    retail: "Minorista",
-    wholesale: "Mayorista",
-    credit: "Credito",
-  }
-
-  const typeColor: Record<CustomerType, string> = {
-    retail: "bg-blue-50 text-blue-700 border-blue-200",
-    wholesale: "bg-amber-50 text-amber-700 border-amber-200",
+  const typeColor: Record<string, string> = {
+    cash: "bg-blue-50 text-blue-700 border-blue-200",
     credit: "bg-purple-50 text-purple-700 border-purple-200",
   }
 
@@ -109,77 +63,10 @@ export default function ClientesPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Clientes</h1>
           <p className="text-muted-foreground">Gestion de clientes y control de creditos</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleOpenCreate}>
-              <Plus className="mr-2 size-4" />
-              Nuevo Cliente
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editingCustomer ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
-              <DialogDescription>
-                {editingCustomer ? "Modifique los datos del cliente" : "Complete los datos del nuevo cliente"}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Nombre *</Label>
-                  <Input placeholder="Nombre completo" value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Identificacion</Label>
-                  <Input placeholder="RUC o Cédula" value={identification} onChange={(e) => setIdentification(e.target.value)} />
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Telefono</Label>
-                  <Input placeholder="0000-0000" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input type="email" placeholder="correo@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Direccion</Label>
-                <Input placeholder="Direccion completa" value={address} onChange={(e) => setAddress(e.target.value)} />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Tipo de Cliente</Label>
-                  <Select value={customerType} onValueChange={(v) => setCustomerType(v as CustomerType)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="retail">Minorista</SelectItem>
-                      <SelectItem value="wholesale">Mayorista</SelectItem>
-                      <SelectItem value="credit">Credito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Limite de Credito (C$)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="100"
-                    value={creditLimit}
-                    onChange={(e) => setCreditLimit(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Cancelar</Button>
-              <Button onClick={handleSave}>{editingCustomer ? "Guardar" : "Crear Cliente"}</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button>
+          <Plus className="mr-2 size-4" />
+          Nuevo Cliente
+        </Button>
       </div>
 
       {/* Summary */}
@@ -200,7 +87,7 @@ export default function ClientesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
-              {customers.filter((c) => c.type === "credit").length}
+              {customers.filter((c) => c.customerType === "credit").length}
             </div>
           </CardContent>
         </Card>
@@ -211,7 +98,7 @@ export default function ClientesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
-              {formatCurrency(customers.reduce((a, c) => a + c.balance, 0))}
+              {formatCurrency(customers.reduce((a, c) => a + Number(c.currentBalance), 0))}
             </div>
           </CardContent>
         </Card>
@@ -271,7 +158,7 @@ export default function ClientesPage() {
                   <TableCell className="font-medium text-foreground">{c.name}</TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">{c.identification || "-"}</TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5">
                       {c.phone && (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Phone className="size-3" /> {c.phone}
@@ -285,22 +172,22 @@ export default function ClientesPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={typeColor[c.type]}>
-                      {typeLabel[c.type]}
+                    <Badge variant="outline" className={typeColor[c.customerType] || ""}>
+                      {typeLabel[c.customerType] || c.customerType}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right font-mono text-foreground">{c.creditLimit > 0 ? formatCurrency(c.creditLimit) : "-"}</TableCell>
-                  <TableCell className={`text-right font-mono font-medium ${c.balance > 0 ? "text-red-600" : "text-foreground"}`}>
-                    {c.balance > 0 ? formatCurrency(c.balance) : "-"}
+                  <TableCell className="text-right font-mono text-foreground">{c.creditLimit > 0 ? formatCurrency(Number(c.creditLimit)) : "-"}</TableCell>
+                  <TableCell className={`text-right font-mono font-medium ${c.currentBalance > 0 ? "text-red-600" : "text-foreground"}`}>
+                    {c.currentBalance > 0 ? formatCurrency(Number(c.currentBalance)) : "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDateShort(c.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(c)}>
+                      <Button variant="ghost" size="icon" onClick={() => {}}>
                         <Pencil className="size-4" />
                         <span className="sr-only">Editar</span>
                       </Button>
-                      {c.id !== "cust-1" && (
+                      {c.id !== 1 && (
                         <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)} className="text-destructive hover:text-destructive">
                           <Trash2 className="size-4" />
                           <span className="sr-only">Eliminar</span>
